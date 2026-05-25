@@ -729,6 +729,7 @@
         }
 
         .butterfly-animate {
+            display: inline-block;
             animation: butterflyFlap 0.3s infinite ease-in-out;
         }
 
@@ -868,6 +869,20 @@
         let titleRect = null;
         let isResetting = false;
         let isShapeForming = false;
+        let isGathering = false;
+        let burstParticles = [];
+        const burstConfig = {
+            count: reduceMotion ? 8 : (isTouchLike ? 24 : 36),
+            speedMin: 3,
+            speedMax: 8,
+            friction: 0.96,
+            gravity: 0.03,
+            lifeMin: 70,
+            lifeMax: 120,
+            fadeStart: 25,
+            maxTotal: 200
+        };
+        const gatherDuration = 500;
         let tempImgBase64 = "";
         let frameCount = 0;
 
@@ -973,6 +988,9 @@
         let moodRecords = JSON.parse(localStorage.getItem('moodRecords')) || [];
 
         function switchToInput(mood = '') {
+            clearAllBurstParticles();
+            isShapeForming = false;
+            isGathering = false;
             setCurrentMood(mood || currentMood);
             titleDom.style.display = 'none';
             mainPage.style.display = 'none';
@@ -983,6 +1001,9 @@
             setTimeout(() => textInput.focus(), 80);
         }
         function switchToMain() {
+            clearAllBurstParticles();
+            isShapeForming = false;
+            isGathering = false;
             inputPage.style.display = 'none';
             recordPage.style.display = 'none';
             mainPage.style.display = 'flex';
@@ -991,6 +1012,8 @@
             tempImgBase64 = "";
             previewImg.style.display = "none";
             setCurrentMood('');
+            refreshBtnRect();
+            refreshTitleRect();
         }
         function switchToRecord() {
             titleDom.style.display = 'none';
@@ -1192,28 +1215,6 @@
             };
         }
 
-        function getCirclePoints(){
-            const pts = [];
-            const center = getCenter();
-            const radius = Math.min(window.innerHeight, window.innerWidth) / 4;
-            for(let a=0; a<=Math.PI*2; a+=0.08){
-                let x = center.x + Math.cos(a) * radius;
-                let y = center.y + Math.sin(a) * radius;
-                pts.push({x, y});
-            }
-            return pts;
-        }
-
-        function getHeartPoints(){
-            const pts = [];
-            const center = getCenter();
-            for(let t=0;t<=Math.PI*2;t+=0.08){
-                let x = 16*Math.pow(Math.sin(t),3);
-                let y = -(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
-                pts.push({x:center.x+x*9,y:center.y+y*9});
-            }
-            return pts;
-        }
 
         class Circle {
             constructor(createTime) {
@@ -1346,75 +1347,168 @@
             }
         }
 
-        function formCircleShape(){
-            if(isShapeForming||isResetting)return;
-            count1++;
-            refreshShow();saveData();
-            isShapeForming=true;
-            const pts=getCirclePoints();
-            const len=Math.min(circleList.length,pts.length);
-            for(let i=0;i<len;i++){
-                circleList[i].flyToPoint(pts[i].x,pts[i].y);
-                circleList[i].toHeartEmoji();
-            }
-            setTimeout(()=>{
-                circleList.forEach(c=>c.resetStyle());
-                isShapeForming=false;
-                switchToInput('心动');
-            },2000);
+        function getBtnCenter(btnEl){
+            const rect = btnEl.getBoundingClientRect();
+            return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
         }
 
-        function formHeartShape(){
-            if(isShapeForming||isResetting)return;
-            count2++;
-            refreshShow();saveData();
-            isShapeForming=true;
-            const pts=getHeartPoints();
-            const len=Math.min(circleList.length,pts.length);
-            for(let i=0;i<len;i++){
-                circleList[i].flyToPoint(pts[i].x,pts[i].y);
-                circleList[i].toSakuraEmoji();
-            }
-            setTimeout(()=>{
-                circleList.forEach(c=>c.resetStyle());
-                isShapeForming=false;
-                switchToInput('开心');
-            },2000);
-        }
-
-        function formButterflyFly(){
-            if(isShapeForming||isResetting)return;
-            count3++;
-            refreshShow();saveData();
-            isShapeForming=true;
-            circleList.forEach(dot=>{
-                dot.toButterflyFly();
+        function clearAllBurstParticles(){
+            burstParticles.forEach(bp => {
+                bp.particle.destroyTimer();
+                safeRemove(bp.particle.el);
             });
-            setTimeout(()=>{
-                circleList.forEach(c=>c.resetStyle());
-                isShapeForming=false;
-                switchToInput('自由');
-            },2000);
+            burstParticles = [];
         }
 
-        function startRain(){
-            if(isShapeForming||isResetting)return;
-            count4++;
-            refreshShow();saveData();
-            circleList.forEach(item=>item.rainDrop());
-            setTimeout(()=>{
-                circleList.forEach(c=>c.resetStyle());
-                switchToInput('伤心');
-            },2000);
+        function burstFromButton(btnEl, glyphSymbol, glyphClass){
+            if(isGathering || isResetting) return;
+            const center = getBtnCenter(btnEl);
+            if(burstParticles.length >= burstConfig.maxTotal){
+                const removeCount = Math.floor(burstParticles.length / 2);
+                for(let i = 0; i < removeCount; i++){
+                    const bp = burstParticles[i];
+                    bp.particle.destroyTimer();
+                    safeRemove(bp.particle.el);
+                }
+                burstParticles.splice(0, removeCount);
+            }
+            const count = burstConfig.count;
+            const isButterfly = glyphClass === 'glyph-wing';
+            for(let i = 0; i < count; i++){
+                const p = new Circle(Date.now());
+                p.x = center.x;
+                p.y = center.y;
+                const angle = (Math.PI * 2 / count) * i + (Math.random() - 0.5) * 0.8;
+                const speed = burstConfig.speedMin + Math.random() * (burstConfig.speedMax - burstConfig.speedMin);
+                p.speedX = Math.cos(angle) * speed;
+                p.speedY = Math.sin(angle) * speed - 1.5;
+                p.radius = 3 + Math.random() * 5;
+                p.size = p.radius * 2;
+                p.el.style.width = p.size + 'px';
+                p.el.style.height = p.size + 'px';
+                if(isButterfly){
+                    p.el.style.background = 'none';
+                    p.el.style.backgroundImage = 'none';
+                    p.el.style.borderRadius = '0';
+                    p.el.classList.add('mood-glyph');
+                    const inner = document.createElement('span');
+                    inner.textContent = glyphSymbol;
+                    inner.className = 'butterfly-inner butterfly-animate';
+                    p.el.appendChild(inner);
+                    p.status = 'butterfly';
+                } else {
+                    p.setMoodGlyph(glyphSymbol, glyphClass);
+                }
+                p.updatePos();
+                const life = burstConfig.lifeMin + Math.random() * (burstConfig.lifeMax - burstConfig.lifeMin);
+                burstParticles.push({ particle: p, life: life, maxLife: life });
+            }
         }
 
-        function bindTapAction(btn,action){
-            const tapMaxMs = 480;
-            const longPressMs = 520;
+        function updateBurstParticles(){
+            if(isGathering) return;
+            for(let i = burstParticles.length - 1; i >= 0; i--){
+                const bp = burstParticles[i];
+                const p = bp.particle;
+                p.speedX *= burstConfig.friction;
+                p.speedY *= burstConfig.friction;
+                p.speedY += burstConfig.gravity;
+                p.x += p.speedX;
+                p.y += p.speedY;
+                p.updatePos();
+                bp.life--;
+                if(bp.life <= burstConfig.fadeStart){
+                    p.el.style.opacity = Math.max(0, bp.life / burstConfig.fadeStart);
+                }
+                if(bp.life <= 0){
+                    p.destroyTimer();
+                    safeRemove(p.el);
+                    burstParticles.splice(i, 1);
+                }
+            }
+        }
+
+        function gatherToButton(btnEl){
+            return new Promise(resolve => {
+                if(isGathering){ resolve(); return; }
+                isGathering = true;
+                isShapeForming = true;
+                const target = getBtnCenter(btnEl);
+                const allParticles = [];
+                circleList.forEach(c => {
+                    allParticles.push({ particle: c, origX: c.x, origY: c.y });
+                    c.speedX = 0; c.speedY = 0;
+                });
+                burstParticles.forEach(bp => {
+                    allParticles.push({ particle: bp.particle, origX: bp.particle.x, origY: bp.particle.y });
+                    bp.particle.speedX = 0; bp.particle.speedY = 0;
+                });
+                const startTime = performance.now();
+                function frame(now){
+                    const elapsed = now - startTime;
+                    const raw = Math.min(elapsed / gatherDuration, 1);
+                    const eased = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2;
+                    allParticles.forEach(ap => {
+                        ap.particle.x = ap.origX + (target.x - ap.origX) * eased;
+                        ap.particle.y = ap.origY + (target.y - ap.origY) * eased;
+                        ap.particle.updatePos();
+                        const scale = 1 - eased * 0.8;
+                        ap.particle.el.style.transform =
+                            `translate3d(${ap.particle.x - ap.particle.radius}px, ${ap.particle.y - ap.particle.radius}px, 0) scale(${scale})`;
+                    });
+                    if(raw < 1){
+                        requestAnimationFrame(frame);
+                    } else {
+                        clearAllBurstParticles();
+                        circleList.forEach(c => { c.fadeDisappear(); });
+                        setTimeout(() => {
+                            circleList.forEach(c => safeRemove(c.el));
+                            circleList = [];
+                            isShapeForming = false;
+                            isGathering = false;
+                            keepMinCount();
+                            resolve();
+                        }, 400);
+                    }
+                }
+                requestAnimationFrame(frame);
+            });
+        }
+
+        function handleBurstFlower()  { burstFromButton(document.getElementById('btnFlower'), '♥', 'glyph-heart'); }
+        function handleBurstGirl()    { burstFromButton(document.getElementById('btnGirl'),   '✿', 'glyph-bloom'); }
+        function handleBurstButterfly(){ burstFromButton(document.getElementById('btnButterfly'), '⋈', 'glyph-wing'); }
+        function handleBurstRain()    { burstFromButton(document.getElementById('btnRain'),   '◞', 'glyph-rain'); }
+
+        async function handleRecordFlower(){
+            await gatherToButton(document.getElementById('btnFlower'));
+            count1++; refreshShow(); saveData();
+            switchToInput('心动');
+        }
+        async function handleRecordGirl(){
+            await gatherToButton(document.getElementById('btnGirl'));
+            count2++; refreshShow(); saveData();
+            switchToInput('开心');
+        }
+        async function handleRecordButterfly(){
+            await gatherToButton(document.getElementById('btnButterfly'));
+            count3++; refreshShow(); saveData();
+            switchToInput('自由');
+        }
+        async function handleRecordRain(){
+            await gatherToButton(document.getElementById('btnRain'));
+            count4++; refreshShow(); saveData();
+            switchToInput('伤心');
+        }
+
+        function bindTapAction(btn, onShortPress, onLongPress){
+            const tapMaxMs = 400;
+            const longPressMs = 600;
             let pressStartedAt = 0;
             let longPressTimer = null;
             let activePointerId = null;
-            let longPressCancelled = false;
+            let longPressFired = false;
+            let waterFillTimer = null;
 
             function vibrate(pattern){
                 if(navigator.vibrate) navigator.vibrate(pattern);
@@ -1429,7 +1523,9 @@
 
             function resetPressState(){
                 clearTimeout(longPressTimer);
+                clearInterval(waterFillTimer);
                 longPressTimer = null;
+                waterFillTimer = null;
                 btn.classList.remove('is-holding');
                 releasePointer();
                 btn.style.setProperty('--water', '0%');
@@ -1440,48 +1536,60 @@
             btn.setAttribute('tabindex','0');
 
             btn.addEventListener('pointerdown', e => {
-                if(e.button !== 0 || isShapeForming || isResetting) return;
+                if(e.button !== 0 || isGathering || isResetting) return;
                 e.preventDefault();
                 clearTimeout(longPressTimer);
+                clearInterval(waterFillTimer);
                 pressStartedAt = performance.now();
-                longPressCancelled = false;
+                longPressFired = false;
                 activePointerId = e.pointerId;
                 btn.setPointerCapture?.(e.pointerId);
                 btn.classList.add('is-holding');
-                btn.style.setProperty('--water', '35%');
+                let waterLevel = 0;
+                waterFillTimer = setInterval(() => {
+                    waterLevel = Math.min(100, waterLevel + (100 / (longPressMs / 50)));
+                    btn.style.setProperty('--water', waterLevel + '%');
+                }, 50);
                 vibrate(12);
-                longPressTimer = setTimeout(() => {
-                    longPressCancelled = true;
-                    btn.style.setProperty('--water', '0%');
+                longPressTimer = setTimeout(async () => {
+                    longPressFired = true;
+                    btn.style.setProperty('--water', '100%');
+                    clearInterval(waterFillTimer);
                     btn.classList.remove('is-holding');
+                    btn.classList.add('hold-complete');
+                    vibrate([14, 22, 18]);
+                    await onLongPress();
+                    btn.classList.remove('hold-complete');
+                    resetPressState();
                 }, longPressMs);
             });
 
             btn.addEventListener('pointerup', e => {
+                if(longPressFired) return;
                 const elapsed = performance.now() - pressStartedAt;
-                const shouldTrigger = !longPressCancelled && elapsed <= tapMaxMs && !isShapeForming && !isResetting;
+                const shouldTrigger = elapsed <= tapMaxMs && !isGathering && !isResetting;
                 resetPressState();
                 if(!shouldTrigger) return;
                 btn.classList.add('hold-complete');
-                vibrate([14, 22, 18]);
-                action();
+                vibrate([8, 12, 10]);
+                onShortPress();
                 setTimeout(() => btn.classList.remove('hold-complete'), 360);
             });
             btn.addEventListener('pointercancel', resetPressState);
             btn.addEventListener('pointerleave', resetPressState);
             btn.addEventListener('keydown', e => {
-                if((e.key === 'Enter' || e.key === ' ') && !isShapeForming && !isResetting){
+                if((e.key === 'Enter' || e.key === ' ') && !isGathering && !isResetting){
                     e.preventDefault();
-                    action();
+                    onShortPress();
                 }
             });
             btn.addEventListener('contextmenu', e => e.preventDefault());
         }
 
-        bindTapAction(document.getElementById('btnFlower'),formCircleShape);
-        bindTapAction(document.getElementById('btnGirl'),formHeartShape);
-        bindTapAction(document.getElementById('btnButterfly'),formButterflyFly);
-        bindTapAction(document.getElementById('btnRain'),startRain);
+        bindTapAction(document.getElementById('btnFlower'), handleBurstFlower, handleRecordFlower);
+        bindTapAction(document.getElementById('btnGirl'),   handleBurstGirl,   handleRecordGirl);
+        bindTapAction(document.getElementById('btnButterfly'), handleBurstButterfly, handleRecordButterfly);
+        bindTapAction(document.getElementById('btnRain'),   handleBurstRain,   handleRecordRain);
 
         function keepMinCount(){
             while(circleList.length < minCount){
@@ -1569,6 +1677,9 @@
         }
 
         function initCircles() {
+            clearAllBurstParticles();
+            isShapeForming = false;
+            isGathering = false;
             circleList.forEach(item => {
                 item.destroyTimer();
                 safeRemove(item.el);
@@ -1630,6 +1741,7 @@
             if(frameCount % particleConfig.collisionEveryFrames === 0) {
                 checkCollision();
             }
+            updateBurstParticles();
             requestAnimationFrame(animate);
         }
 
