@@ -985,7 +985,25 @@
             showToast('心情计数已重置');
         });
 
-        let moodRecords = JSON.parse(localStorage.getItem('moodRecords')) || [];
+        let moodRecords = [];
+        const API_BASE = 'http://localhost:3000';
+        let apiAvailable = false;
+
+        async function loadRecords(){
+            try {
+                const resp = await fetch(`${API_BASE}/api/records`);
+                if(resp.ok){
+                    moodRecords = await resp.json();
+                    apiAvailable = true;
+                    return;
+                }
+            } catch(e) { /* 后端不可用，fallback */ }
+            apiAvailable = false;
+            moodRecords = JSON.parse(localStorage.getItem('moodRecords')) || [];
+        }
+        function saveRecordsLocal(){
+            localStorage.setItem('moodRecords', JSON.stringify(moodRecords));
+        }
 
         function switchToInput(mood = '') {
             clearAllBurstParticles();
@@ -1100,12 +1118,19 @@
             recordBox.innerHTML = html;
 
             document.querySelectorAll('.del-btn').forEach(btn=>{
-                btn.addEventListener('click',function(e){
+                btn.addEventListener('click', async function(e){
                     e.stopPropagation();
                     const idx = parseInt(this.dataset.index);
                     if(!confirm('确定要删除这张心情卡吗？')) return;
+                    const record = moodRecords[idx];
+                    if(apiAvailable && record.id && !String(record.id).startsWith('local_')){
+                        try {
+                            const resp = await fetch(`${API_BASE}/api/records/${record.id}`, { method: 'DELETE' });
+                            if(!resp.ok) throw new Error('删除失败');
+                        } catch(e){ apiAvailable = false; }
+                    }
                     moodRecords.splice(idx,1);
-                    localStorage.setItem('moodRecords',JSON.stringify(moodRecords));
+                    saveRecordsLocal();
                     renderRecord();
                     showToast('已删除这张心情卡');
                 })
@@ -1181,22 +1206,48 @@
             reader.readAsDataURL(file);
         })
 
-        function saveRecord() {
+        async function saveRecord() {
             const content = textInput.value.trim();
             if(!content && !tempImgBase64){
                 alert('内容或图片不能为空');
                 return;
             }
+            if(apiAvailable){
+                try {
+                    const form = new FormData();
+                    form.append('mood', currentMood);
+                    form.append('content', content);
+                    if(tempImgBase64){
+                        const blob = await (await fetch(tempImgBase64)).blob();
+                        form.append('image', blob, 'photo.png');
+                    }
+                    const resp = await fetch(`${API_BASE}/api/records`, { method: 'POST', body: form });
+                    if(resp.ok){
+                        const saved = await resp.json();
+                        moodRecords.unshift(saved);
+                        saveRecordsLocal();
+                        showToast("已悄悄保存 ✦");
+                        textInput.value = "";
+                        tempImgBase64 = "";
+                        previewImg.style.display = "none";
+                        imgFile.value = "";
+                        return;
+                    }
+                } catch(e){ apiAvailable = false; }
+            }
+            // fallback: localStorage
             const now = new Date();
             const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-            moodRecords.unshift({
+            const record = {
+                id: 'local_' + Date.now(),
                 time: timeStr,
                 mood: currentMood,
                 content: content,
                 img: tempImgBase64
-            });
-            localStorage.setItem('moodRecords', JSON.stringify(moodRecords));
-            showToast("已悄悄保存 ✦");
+            };
+            moodRecords.unshift(record);
+            saveRecordsLocal();
+            showToast("已悄悄保存（本地）✦");
             textInput.value = "";
             tempImgBase64 = "";
             previewImg.style.display = "none";
@@ -1746,9 +1797,11 @@
         }
 
         window.addEventListener('load', () => {
-            initCircles();
-            animate();
-            setInterval(orderSplit, particleConfig.splitEveryMs);
+            loadRecords().then(() => {
+                initCircles();
+                animate();
+                setInterval(orderSplit, particleConfig.splitEveryMs);
+            });
         });
 
         window.addEventListener('resize', () => {
