@@ -1198,6 +1198,7 @@
         imgFile.addEventListener('change',function(e){
             const file = e.target.files[0];
             if(!file) return;
+            tempImgBase64 = ""; // 先清空，防止读到旧数据
             const reader = new FileReader();
             reader.onload = function(ev){
                 tempImgBase64 = ev.target.result;
@@ -1207,12 +1208,18 @@
             reader.readAsDataURL(file);
         })
 
+        let isSaving = false;
         async function saveRecord() {
+            if(isSaving) return;
             const content = textInput.value.trim();
             if(!content && !tempImgBase64){
                 alert('内容或图片不能为空');
                 return;
             }
+            isSaving = true;
+            saveBtn.textContent = '保存中...';
+            saveBtn.disabled = true;
+            try {
             if(apiAvailable){
                 try {
                     const form = new FormData();
@@ -1247,12 +1254,24 @@
                 img: tempImgBase64
             };
             moodRecords.unshift(record);
-            saveRecordsLocal();
+            try {
+                saveRecordsLocal();
+            } catch(e) {
+                // localStorage 满了，删除刚加入的记录并提示
+                moodRecords.shift();
+                showToast("保存失败：存储空间不足，请删除旧记录后重试");
+                return;
+            }
             showToast("已悄悄保存（本地）✦");
             textInput.value = "";
             tempImgBase64 = "";
             previewImg.style.display = "none";
             imgFile.value = "";
+            } finally {
+                isSaving = false;
+                saveBtn.textContent = '保存记录';
+                saveBtn.disabled = false;
+            }
         }
 
         backBtn.addEventListener('click', switchToMain);
