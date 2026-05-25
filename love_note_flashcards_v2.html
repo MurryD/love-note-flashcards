@@ -1,0 +1,1655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Love Note</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --ink: #49375f;
+            --ink-soft: #6c5a82;
+            --lavender: #eee8fb;
+            --lilac: #e7d8f2;
+            --blush: #f7dfea;
+            --paper: rgba(255, 250, 255, 0.58);
+            --paper-strong: rgba(255, 250, 255, 0.76);
+            --line: rgba(73, 55, 95, 0.28);
+            --display-font: "Curlz MT", "Ink Free", "Segoe Print", "Comic Sans MS", cursive;
+            --text-font: "Courier New", "KaiTi", "STKaiti", serif;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            background:
+                radial-gradient(circle at 18% 72%, rgba(255, 224, 242, 0.84) 0 12%, transparent 28%),
+                radial-gradient(circle at 78% 28%, rgba(249, 218, 238, 0.76) 0 10%, transparent 27%),
+                linear-gradient(145deg, #f7effa 0%, #e8e0f6 45%, #f3e3ef 100%);
+            overflow: hidden;
+            position: relative;
+            font-family: var(--text-font);
+            color: var(--ink);
+        }
+
+        body::before,
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        body::before {
+            opacity: 0.33;
+            mix-blend-mode: multiply;
+            background-image:
+                radial-gradient(var(--ink) 0.7px, transparent 0.8px),
+                radial-gradient(rgba(73, 55, 95, 0.42) 0.55px, transparent 0.65px);
+            background-size: 6px 6px, 11px 11px;
+            background-position: 0 0, 3px 5px;
+        }
+
+        body::after {
+            opacity: 0.22;
+            background:
+                repeating-linear-gradient(0deg, transparent 0 3px, rgba(73, 55, 95, 0.06) 3px 4px),
+                radial-gradient(circle at 50% 18%, rgba(255,255,255,0.7), transparent 35%);
+        }
+
+        .page-title {
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 4px;
+            z-index: 30;
+            pointer-events: none;
+            filter: url(#roughen);
+        }
+        .title-letter {
+            font-size: clamp(50px, 9vw, 96px);
+            font-weight: 900;
+            color: transparent;
+            background:
+                radial-gradient(circle, rgba(73,55,95,0.24) 0 1.8px, transparent 2px),
+                linear-gradient(135deg, #3c2d52 0%, #5b4770 100%);
+            background-size: 7px 7px, 100% 100%;
+            background-clip: text;
+            -webkit-background-clip: text;
+            text-shadow:
+                1px 1px 0 rgba(255,255,255,0.32),
+                0 8px 18px rgba(73,55,95,0.12);
+            letter-spacing: 0;
+            transition: transform 0.8s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            font-family: var(--display-font);
+        }
+
+        .main-page {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 24px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 5;
+        }
+
+
+
+        .home-hint,
+        .record-hint,
+        .mood-title {
+            color: rgba(73,55,95,0.72);
+            font-family: var(--text-font);
+            text-align: center;
+            letter-spacing: 0.04em;
+            text-shadow: 1px 1px 0 rgba(255,255,255,0.42);
+            z-index: 2;
+        }
+
+        .home-hint {
+            margin-bottom: 4px;
+            font-size: 16px;
+        }
+
+        .mood-title {
+            margin-bottom: 14px;
+            font-size: clamp(18px, 4vw, 24px);
+            color: var(--ink);
+        }
+
+        .record-hint {
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: 28px;
+            transform: translate(-50%, 18px);
+            z-index: 120;
+            padding: 10px 18px;
+            border-radius: 999px;
+            background: rgba(73,55,95,0.9);
+            color: #fff8ff;
+            border: 1px solid rgba(255,255,255,0.44);
+            box-shadow: 0 14px 36px rgba(73,55,95,0.22);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .24s ease, transform .24s ease;
+            font-size: 15px;
+        }
+
+        .toast.is-show {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+
+        .input-page {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: transparent;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            z-index: 20;
+        }
+
+        .record-page {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: transparent;
+            display: none;
+            flex-direction: column;
+            padding: 20px;
+            padding-top: 90px;
+            z-index: 20;
+        }
+
+        .input-wrap {
+            width: 90%;
+            height: 65%;
+            max-width: 720px;
+            background: var(--paper);
+            border-radius: 18px;
+            padding: 18px;
+            border: 1px solid var(--line);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: 0 18px 45px rgba(73, 55, 95, 0.12), inset 0 0 0 1px rgba(255,255,255,0.35);
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .input-wrap::before,
+        .record-content::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            opacity: 0.18;
+            pointer-events: none;
+            background-image: radial-gradient(var(--ink) 0.8px, transparent 0.9px);
+            background-size: 5px 5px;
+        }
+
+        .input-area {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 17px;
+            resize: none;
+            background: transparent;
+            color: var(--ink);
+            line-height: 1.8;
+            position: relative;
+            z-index: 1;
+            font-family: var(--text-font);
+        }
+
+        .input-area::placeholder {
+            color: rgba(73,55,95,0.52);
+        }
+
+        .upload-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .upload-btn {
+            padding: 7px 16px;
+            background:
+                radial-gradient(circle, rgba(255,255,255,0.25) 0 1px, transparent 1.2px),
+                rgba(73, 55, 95, 0.9);
+            background-size: 5px 5px, 100% 100%;
+            color: #fff8ff;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 16px;
+            font-family: var(--display-font);
+            letter-spacing: 0;
+            box-shadow: 0 8px 18px rgba(73,55,95,0.18);
+        }
+        #imgFile {
+            display: none;
+        }
+        .preview-img {
+            max-height: 80px;
+            max-width: 120px;
+            object-fit: cover;
+            border-radius: 10px;
+            display: none;
+            border: 1px solid var(--line);
+        }
+
+        .record-content {
+            flex: 1;
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            padding: 34px max(8vw, 28px);
+            margin-bottom: 15px;
+            background: var(--paper);
+            overflow-x: auto;
+            overflow-y: hidden;
+            line-height: 1.6;
+            box-shadow: 0 18px 45px rgba(73, 55, 95, 0.12), inset 0 0 0 1px rgba(255,255,255,0.35);
+            backdrop-filter: blur(10px);
+            position: relative;
+            color: var(--ink);
+            display: flex;
+            gap: clamp(12px, 2vw, 24px);
+            align-items: center;
+            scroll-snap-type: x mandatory;
+            scrollbar-width: thin;
+            perspective: 1200px;
+            min-height: 0;
+        }
+        .record-content.is-empty {
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            overflow: hidden;
+        }
+        .empty-record {
+            position: relative;
+            z-index: 1;
+            padding: 24px 26px;
+            border-radius: 18px;
+            background: rgba(255,250,255,0.56);
+            border: 1px dashed rgba(73,55,95,0.28);
+            line-height: 1.9;
+        }
+        .record-item {
+            flex: 0 0 min(76vw, 370px);
+            height: min(66vh, 520px);
+            padding: 22px 20px 58px;
+            border: 1px solid rgba(73,55,95,0.2);
+            border-radius: 18px;
+            background:
+                radial-gradient(circle at 18% 12%, rgba(255,255,255,0.68), transparent 28%),
+                radial-gradient(circle, rgba(73,55,95,0.08) 0 1px, transparent 1.15px),
+                rgba(255,250,255,0.74);
+            background-size: 100% 100%, 6px 6px, 100% 100%;
+            box-shadow: 0 16px 32px rgba(73,55,95,0.13), inset 0 0 0 1px rgba(255,255,255,0.38);
+            position: relative;
+            z-index: 1;
+            scroll-snap-align: center;
+            transform: translateY(14px) scale(0.92) rotate(var(--card-rot, -0.6deg));
+            transform-style: preserve-3d;
+            transform-origin: center center;
+            opacity: 0.66;
+            overflow-y: auto;
+            transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .28s ease, box-shadow .28s ease, filter .28s ease;
+            will-change: transform;
+        }
+        .record-item:nth-child(even) {
+            --card-rot: 0.7deg;
+        }
+        .record-item.is-active {
+            transform: translateY(-10px) scale(1.08) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)) rotate(0deg);
+            opacity: 1;
+            z-index: 10;
+            box-shadow: 0 30px 72px rgba(73,55,95,0.25), inset 0 0 0 1px rgba(255,255,255,0.45);
+            filter: saturate(1.04);
+        }
+        .record-mood {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 8px;
+            margin-bottom: 14px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: rgba(73,55,95,0.1);
+            border: 1px solid rgba(73,55,95,0.16);
+            color: var(--ink);
+            font-size: 12px;
+            letter-spacing: 0.06em;
+        }
+        .record-meta {
+            display: inline-block;
+            margin-bottom: 14px;
+            color: rgba(73,55,95,0.68);
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .record-text {
+            margin: 0;
+            font-size: 17px;
+            line-height: 1.85;
+            white-space: pre-wrap;
+        }
+        .record-item img {
+            max-width: 100%;
+            max-height: 230px;
+            border-radius: 10px;
+            margin-top: 16px;
+            object-fit: contain;
+            border: 1px solid var(--line);
+            cursor: zoom-in;
+            box-shadow: 0 10px 22px rgba(73,55,95,0.12);
+        }
+        .del-btn {
+            position: absolute;
+            right: 16px;
+            bottom: 16px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(73, 55, 95, 0.88);
+            color: #fff8ff;
+            border: 1px solid rgba(255,255,255,0.4);
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        .del-btn:hover {
+            background: #332440;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .back-btn {
+            padding: 10px 30px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background:
+                radial-gradient(circle, rgba(73,55,95,0.12) 0 1.1px, transparent 1.3px),
+                var(--paper-strong);
+            background-size: 5px 5px, 100% 100%;
+            color: var(--ink);
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: var(--display-font);
+            box-shadow: 0 10px 22px rgba(73,55,95,0.12);
+        }
+        .back-btn:hover{
+            background-color: rgba(255,255,255,0.9);
+            transform: translateY(-2px) rotate(-1deg);
+        }
+
+        .operate-btn {
+            margin-top: 10px;
+            padding: 11px 30px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.46);
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: var(--display-font);
+            letter-spacing: 0;
+            box-shadow: 0 12px 24px rgba(73,55,95,0.18);
+        }
+        .read-btn {
+            background:
+                radial-gradient(circle, rgba(255,255,255,0.22) 0 1px, transparent 1.2px),
+                #4b3962;
+            background-size: 5px 5px, 100% 100%;
+            color: #fff8ff;
+        }
+        .read-btn:hover {
+            background-color: #392849;
+            transform: translateY(-3px) rotate(1deg);
+        }
+        .reset-btn {
+            background:
+                radial-gradient(circle, rgba(73,55,95,0.16) 0 1px, transparent 1.2px),
+                rgba(255, 246, 255, 0.72);
+            background-size: 5px 5px, 100% 100%;
+            color: var(--ink);
+            border-color: var(--line);
+        }
+        .reset-btn:hover {
+            background-color: rgba(255,255,255,0.86);
+            transform: translateY(-3px) rotate(-1deg);
+        }
+
+        .btn-row {
+            display: flex;
+            gap: clamp(36px, 7vw, 86px);
+        }
+
+        .btn-row + .btn-row {
+            margin-top: 8px;
+        }
+
+        .capsule-btn {
+            min-width: 152px;
+            padding: 14px 34px 13px;
+            border-radius: 999px;
+            background:
+                radial-gradient(circle, rgba(73,55,95,0.16) 0 1px, transparent 1.25px),
+                linear-gradient(135deg, rgba(255,255,255,0.72), rgba(244,228,247,0.62));
+            background-size: 5px 5px, 100% 100%;
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(73, 55, 95, 0.25);
+            font-size: 22px;
+            color: var(--ink);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            animation: bounce 2s infinite ease-in-out;
+            position: relative;
+            overflow: visible;
+            isolation: isolate;
+            contain: layout;
+            font-family: var(--display-font);
+            text-align: center;
+            box-shadow: 0 14px 28px rgba(73,55,95,0.14), inset 0 0 0 1px rgba(255,255,255,0.36);
+            text-shadow: 1px 1px 0 rgba(255,255,255,0.45);
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            --water: 0%;
+        }
+        .capsule-btn::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.44), transparent 46%),
+                radial-gradient(circle, rgba(73,55,95,0.10) 0 1px, transparent 1.2px);
+            background-size: 100% 100%, 5px 5px;
+            opacity: 0.72;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .capsule-btn::after {
+            content: "";
+            position: absolute;
+            inset: 4px;
+            border-radius: inherit;
+            border: 1px dashed rgba(73,55,95,0.22);
+            opacity: 0;
+            transform: scale(1.06);
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            pointer-events: none;
+            z-index: 3;
+        }
+        .btn-label {
+            position: relative;
+            z-index: 4;
+        }
+        .water-fill {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: var(--water);
+            min-height: 0;
+            border-radius: inherit;
+            overflow: hidden;
+            pointer-events: none;
+            transform: translate3d(0, 0, 0) rotate(var(--liquid-tilt, 0deg));
+            transform-origin: 50% 100%;
+            transition: height 0.04s linear, filter 0.18s ease;
+            z-index: 1;
+            filter: saturate(1.08);
+            background:
+                radial-gradient(circle at 28% 72%, rgba(255,255,255,0.30) 0 2px, transparent 2.4px),
+                radial-gradient(circle at 72% 38%, rgba(255,255,255,0.22) 0 1.6px, transparent 2px),
+                radial-gradient(circle at 48% 58%, rgba(255,255,255,0.18) 0 1px, transparent 1.4px),
+                linear-gradient(180deg, rgba(207,184,237,0.82), rgba(107,77,145,0.82));
+            background-size: 44px 34px, 36px 32px, 22px 22px, 100% 100%;
+            background-position: 0 0, 12px 8px, 6px 4px, 0 0;
+            animation: liquidBubbles 2.6s linear infinite;
+        }
+        .water-fill::before,
+        .water-fill::after {
+            content: "";
+            position: absolute;
+            left: -32%;
+            top: -18px;
+            width: 164%;
+            height: 34px;
+            border-radius: 43% 57% 46% 54% / 54% 46% 54% 46%;
+            background:
+                radial-gradient(ellipse at 50% 72%, rgba(255,250,255,0.66) 0 56%, transparent 58%),
+                linear-gradient(90deg, transparent 0 10%, rgba(255,255,255,0.18) 30%, rgba(255,255,255,0.42) 50%, rgba(255,255,255,0.18) 70%, transparent 90%);
+            opacity: 0.82;
+            animation: liquidWave 1.05s ease-in-out infinite;
+        }
+        .water-fill::after {
+            top: -13px;
+            height: 26px;
+            opacity: 0.42;
+            animation-duration: 1.65s;
+            animation-direction: reverse;
+            transform: translateX(-8%) scaleY(0.76);
+        }
+        .capsule-btn:hover {
+            background-color: rgba(255, 255, 255, 0.86);
+            transform: translateY(-4px) rotate(-1deg);
+        }
+        .capsule-btn.is-holding {
+            animation: holdPulse 0.9s ease-in-out infinite;
+            background:
+                radial-gradient(circle, rgba(255,255,255,0.35) 0 1px, transparent 1.25px),
+                linear-gradient(135deg, rgba(255,255,255,0.9), rgba(238,213,247,0.82));
+            background-size: 5px 5px, 100% 100%;
+            box-shadow:
+                0 8px 22px rgba(73,55,95,0.2),
+                0 0 0 8px rgba(73,55,95,0.08),
+                inset 0 3px 10px rgba(73,55,95,0.16);
+            transform: translateY(2px) scale(0.97);
+        }
+        .capsule-btn.is-holding::before {
+            opacity: 0.9;
+        }
+        .capsule-btn.is-holding::after {
+            opacity: 1;
+            transform: scale(0.96);
+            animation: pressTexture 0.18s steps(2) infinite;
+        }
+        .capsule-btn.hold-complete {
+            animation: stampPop 0.34s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+
+        .count-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #4b3962;
+            color: #fff8ff;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            z-index: 5;
+        }
+
+        .white-circle {
+            position: absolute;
+            border-radius: 50%;
+            background:
+                radial-gradient(circle, rgba(73,55,95,0.17) 0 1px, transparent 1.2px),
+                rgba(255, 251, 255, 0.86);
+            background-size: 5px 5px, 100% 100%;
+            z-index: 2;
+            transition: all 0.2s ease, opacity 1.5s ease;
+            box-shadow: 0 2px 8px rgba(73,55,95,0.12);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            pointer-events: none;
+            color: var(--ink);
+        }
+        .mood-glyph {
+            background: none !important;
+            background-image: none !important;
+            border-radius: 0 !important;
+            color: var(--ink);
+            filter: url(#roughen);
+            font-family: "Georgia", "Times New Roman", serif;
+            font-weight: 700;
+            text-shadow: 1px 1px 0 rgba(255,255,255,0.34);
+        }
+        .glyph-heart { font-size: 27px; }
+        .glyph-bloom { font-size: 28px; }
+        .glyph-wing { font-size: 30px; letter-spacing: -6px; }
+        .glyph-rain { font-size: 28px; }
+
+        .image-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background:
+                radial-gradient(circle at 50% 35%, rgba(245,232,255,0.22), transparent 34%),
+                rgba(31, 22, 42, 0.72);
+            backdrop-filter: blur(10px);
+        }
+        .image-modal.is-open {
+            display: flex;
+        }
+        .image-modal img {
+            max-width: min(92vw, 920px);
+            max-height: 82vh;
+            object-fit: contain;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.42);
+            box-shadow: 0 24px 70px rgba(0,0,0,0.34);
+        }
+        .modal-close {
+            position: fixed;
+            top: 20px;
+            right: 22px;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.45);
+            background: rgba(255,250,255,0.22);
+            color: #fff8ff;
+            cursor: pointer;
+            font-family: var(--display-font);
+            font-size: 22px;
+        }
+
+        .fade-out {
+            opacity: 0;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        @keyframes holdPulse {
+            0%, 100% { transform: translateY(2px) scale(0.97); }
+            50% { transform: translateY(3px) scale(0.955); }
+        }
+
+        @keyframes liquidWave {
+            0%, 100% { transform: translateX(-4%) translateY(0) scaleY(0.82) rotate(-1.2deg); }
+            50% { transform: translateX(4%) translateY(2px) scaleY(1.06) rotate(1.2deg); }
+        }
+
+        @keyframes liquidBubbles {
+            0% { background-position: 0 18px, 12px 28px, 6px 20px, 0 0; }
+            100% { background-position: 0 -18px, 12px -8px, 6px -16px, 0 0; }
+        }
+
+        @keyframes pressTexture {
+            0%, 100% { filter: contrast(1); }
+            50% { filter: contrast(1.18); }
+        }
+
+        @keyframes stampPop {
+            0% { transform: scale(0.96); }
+            55% { transform: scale(1.07) rotate(-1deg); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes butterflyFlap {
+            0%,100% { transform: scale(1) rotate(-5deg); }
+            50% { transform: scale(1.15) rotate(5deg); }
+        }
+
+        .butterfly-animate {
+            animation: butterflyFlap 0.3s infinite ease-in-out;
+        }
+
+        .input-area:focus,
+        .back-btn:focus-visible,
+        .operate-btn:focus-visible,
+        .capsule-btn:focus-visible,
+        .modal-close:focus-visible,
+        .del-btn:focus-visible {
+            outline: 2px solid rgba(73, 55, 95, 0.55);
+            outline-offset: 4px;
+        }
+
+        @media (max-width: 760px), (hover: none) {
+            body { min-height: 100dvh; }
+            .main-page { gap: 18px; }
+            .btn-row { gap: 20px; }
+            .btn-row + .btn-row { margin-top: 0; }
+            .capsule-btn { min-width: 132px; padding: 13px 30px 12px; }
+            .record-page { padding-top: 82px; }
+            .record-content { padding: 28px 12vw; }
+            .record-item { flex-basis: 76vw; height: min(62vh, 500px); }
+            .record-item.is-active { transform: translateY(-6px) scale(1.04) rotate(0deg); }
+            .record-hint::before { content: "左右滑动，停下查看一张心情卡"; }
+            .record-hint { font-size: 0; }
+            .record-hint::before { font-size: 14px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { animation: none !important; transition: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <svg width="0" height="0" aria-hidden="true" focusable="false">
+        <filter id="roughen">
+            <feTurbulence type="fractalNoise" baseFrequency="0.018 0.09" numOctaves="2" seed="7" result="noise"/>
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+    </svg>
+
+    <div class="page-title" id="pageTitle">
+        <span class="title-letter">L</span>
+        <span class="title-letter">o</span>
+        <span class="title-letter">v</span>
+        <span class="title-letter">e</span>
+        <span class="title-letter">&nbsp;</span>
+        <span class="title-letter">N</span>
+        <span class="title-letter">o</span>
+        <span class="title-letter">t</span>
+        <span class="title-letter">e</span>
+    </div>
+
+    <div class="main-page" id="mainPage">
+        <div class="home-hint">长按一个心情，记录此刻</div>
+        <div class="btn-row">
+            <div class="capsule-btn" id="btnFlower">
+                <span class="water-fill"></span>
+                <span class="btn-label">心动</span>
+                <span class="count-badge" id="num1">0</span>
+            </div>
+            <div class="capsule-btn" id="btnGirl">
+                <span class="water-fill"></span>
+                <span class="btn-label">开心</span>
+                <span class="count-badge" id="num2">0</span>
+            </div>
+        </div>
+        <div class="btn-row">
+            <div class="capsule-btn" id="btnButterfly">
+                <span class="water-fill"></span>
+                <span class="btn-label">自由</span>
+                <span class="count-badge" id="num3">0</span>
+            </div>
+            <div class="capsule-btn" id="btnRain">
+                <span class="water-fill"></span>
+                <span class="btn-label">伤心</span>
+                <span class="count-badge" id="num4">0</span>
+            </div>
+        </div>
+        <button class="operate-btn read-btn" id="openRecordBtn">翻看闪卡</button>
+        <button class="operate-btn reset-btn" id="resetCountBtn">重置心情计数</button>
+    </div>
+
+    <div class="input-page" id="inputPage">
+        <div class="mood-title" id="moodTitle">今天想留下什么心情？</div>
+        <div class="input-wrap">
+            <textarea class="input-area" id="textInput" placeholder="在这里写下此刻的心情与想法..."></textarea>
+            <div class="upload-box">
+                <label class="upload-btn">
+                    选择图片
+                    <input type="file" id="imgFile" accept="image/*">
+                </label>
+                <img class="preview-img" id="previewImg" alt="预览图">
+            </div>
+        </div>
+        <div class="btn-group">
+            <button class="back-btn" id="backBtn">返回</button>
+            <button class="back-btn" id="saveBtn">保存记录</button>
+        </div>
+    </div>
+
+    <div class="record-page" id="recordPage">
+        <div class="record-hint" id="recordHint">移动鼠标翻看，或左右滑动卡片</div>
+        <div class="record-content" id="recordBox"></div>
+        <button class="back-btn" id="closeRecordBtn">返回</button>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <div class="image-modal" id="imageModal" aria-hidden="true">
+        <button class="modal-close" id="closeImageModal" aria-label="关闭大图">x</button>
+        <img id="modalImage" alt="放大的记录图片">
+    </div>
+    <script>
+        const body = document.body;
+        const maxMergeNum = 3;
+        const maxLimit = 300;
+        const minCount = 80;
+        const initCount = 80;
+        const splitInterval = 35;
+        let circleList = [];
+        let btnRects = [];
+        let titleRect = null;
+        let isResetting = false;
+        let isShapeForming = false;
+        let tempImgBase64 = "";
+
+        const mainPage = document.getElementById('mainPage');
+        const inputPage = document.getElementById('inputPage');
+        const recordPage = document.getElementById('recordPage');
+        const backBtn = document.getElementById('backBtn');
+        const closeRecordBtn = document.getElementById('closeRecordBtn');
+        const openRecordBtn = document.getElementById('openRecordBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const resetCountBtn = document.getElementById('resetCountBtn');
+        const textInput = document.getElementById('textInput');
+        const recordBox = document.getElementById('recordBox');
+        const titleLetters = document.querySelectorAll('.title-letter');
+        const titleDom = document.getElementById('pageTitle');
+        const imgFile = document.getElementById('imgFile');
+        const previewImg = document.getElementById('previewImg');
+        const imageModal = document.getElementById('imageModal');
+        const modalImage = document.getElementById('modalImage');
+        const closeImageModal = document.getElementById('closeImageModal');
+        const moodTitle = document.getElementById('moodTitle');
+        const toast = document.getElementById('toast');
+        let currentMood = '';
+        let toastTimer = null;
+        let scrollTimer = null;
+
+        const num1Dom = document.getElementById('num1');
+        const num2Dom = document.getElementById('num2');
+        const num3Dom = document.getElementById('num3');
+        const num4Dom = document.getElementById('num4');
+
+        function animateTitle() {
+            titleLetters.forEach((letter, i) => {
+                const offset = (Math.random() - 0.5) * 60;
+                const offsetY = (Math.random() - 0.5) * 20;
+                letter.style.transform = `translate(${offset}px, ${offsetY}px)`;
+            });
+            setTimeout(() => {
+                titleLetters.forEach(letter => {
+                    letter.style.transform = `translate(0, 0)`;
+                });
+            }, 1200);
+        }
+        setInterval(animateTitle, 3000);
+
+        function refreshTitleRect(){
+            titleRect = titleDom.getBoundingClientRect();
+        }
+
+        let count1 = parseInt(localStorage.getItem('c1')) || 0;
+        let count2 = parseInt(localStorage.getItem('c2')) || 0;
+        let count3 = parseInt(localStorage.getItem('c3')) || 0;
+        let count4 = parseInt(localStorage.getItem('c4')) || 0;
+
+        function refreshShow(){
+            num1Dom.innerText = count1;
+            num2Dom.innerText = count2;
+            num3Dom.innerText = count3;
+            num4Dom.innerText = count4;
+        }
+        refreshShow();
+
+        function saveData(){
+            localStorage.setItem('c1',count1);
+            localStorage.setItem('c2',count2);
+            localStorage.setItem('c3',count3);
+            localStorage.setItem('c4',count4);
+        }
+
+        function showToast(message){
+            clearTimeout(toastTimer);
+            toast.textContent = message;
+            toast.classList.add('is-show');
+            toastTimer = setTimeout(() => toast.classList.remove('is-show'), 1700);
+        }
+
+        function pad(n){
+            return String(n).padStart(2, '0');
+        }
+
+        function setCurrentMood(mood){
+            currentMood = mood;
+            moodTitle.textContent = mood ? `今天是「${mood}」的一天，写一点想留住的瞬间吧` : '今天想留下什么心情？';
+        }
+
+        resetCountBtn.addEventListener('click',()=>{
+            if(!confirm('确定要清空所有心情次数吗？记录不会被删除。')) return;
+            count1 = 0;
+            count2 = 0;
+            count3 = 0;
+            count4 = 0;
+            saveData();
+            refreshShow();
+            showToast('心情计数已重置');
+        });
+
+        let moodRecords = JSON.parse(localStorage.getItem('moodRecords')) || [];
+
+        function switchToInput(mood = '') {
+            setCurrentMood(mood || currentMood);
+            mainPage.style.display = 'none';
+            inputPage.style.display = 'flex';
+            tempImgBase64 = "";
+            previewImg.style.display = "none";
+            imgFile.value = "";
+            setTimeout(() => textInput.focus(), 80);
+        }
+        function switchToMain() {
+            inputPage.style.display = 'none';
+            recordPage.style.display = 'none';
+            mainPage.style.display = 'flex';
+            textInput.value = '';
+            tempImgBase64 = "";
+            previewImg.style.display = "none";
+            setCurrentMood('');
+        }
+        function switchToRecord() {
+            mainPage.style.display = 'none';
+            recordPage.style.display = 'flex';
+            renderRecord();
+        }
+
+        function escapeHTML(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function activateCard(card){
+            const cards = [...document.querySelectorAll('.record-item')];
+            cards.forEach(item => {
+                item.classList.remove('is-active');
+                item.style.setProperty('--tilt-x', '0deg');
+                item.style.setProperty('--tilt-y', '0deg');
+            });
+            if(card) card.classList.add('is-active');
+        }
+
+        function activateNearestCardByCenter(){
+            const cards = [...document.querySelectorAll('.record-item')];
+            if(cards.length === 0) return;
+            const boxRect = recordBox.getBoundingClientRect();
+            const boxCenter = boxRect.left + boxRect.width / 2;
+            let nearest = null;
+            let minDistance = Infinity;
+
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                const cardCenter = rect.left + rect.width / 2;
+                const distance = Math.abs(cardCenter - boxCenter);
+                if(distance < minDistance){
+                    minDistance = distance;
+                    nearest = card;
+                }
+            });
+            activateCard(nearest);
+        }
+
+        function activateNearestCardByMouse(mouseX){
+            const cards = [...document.querySelectorAll('.record-item')];
+            let nearest = null;
+            let minDistance = Infinity;
+
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                const center = rect.left + rect.width / 2;
+                const distance = Math.abs(mouseX - center);
+                if(distance < minDistance){
+                    minDistance = distance;
+                    nearest = card;
+                }
+            });
+            activateCard(nearest);
+        }
+
+        function renderRecord() {
+            recordBox.classList.toggle('is-empty', moodRecords.length === 0);
+            if(moodRecords.length === 0) {
+                recordBox.innerHTML = `<div class="empty-record">还没有留下心情<br>长按一个心情，写下第一张 Love Note 吧</div>`;
+                return;
+            }
+            let html = "";
+            moodRecords.forEach((item, index) => {
+                let imgHtml = item.img ? `<img class="record-img" src="${item.img}" alt="笔记图片">` : "";
+                let moodHtml = item.mood ? `<span class="record-mood">${escapeHTML(item.mood)}</span>` : "";
+                html += `
+                    <div class="record-item" data-index="${index}" data-mood="${escapeHTML(item.mood || '')}">
+                        ${moodHtml}<span class="record-meta">${escapeHTML(item.time)}</span>
+                        <p class="record-text">${escapeHTML(item.content || "只留下了一张图片")}</p>
+                        ${imgHtml}
+                        <button class="del-btn" data-index="${index}" aria-label="删除这条记录">x</button>
+                    </div>
+                `;
+            });
+            recordBox.innerHTML = html;
+
+            document.querySelectorAll('.del-btn').forEach(btn=>{
+                btn.addEventListener('click',function(e){
+                    e.stopPropagation();
+                    const idx = parseInt(this.dataset.index);
+                    if(!confirm('确定要删除这张心情卡吗？')) return;
+                    moodRecords.splice(idx,1);
+                    localStorage.setItem('moodRecords',JSON.stringify(moodRecords));
+                    renderRecord();
+                    showToast('已删除这张心情卡');
+                })
+            })
+
+            document.querySelectorAll('.record-img').forEach(img=>{
+                img.addEventListener('click',function(e){
+                    e.stopPropagation();
+                    modalImage.src = this.src;
+                    imageModal.classList.add('is-open');
+                    imageModal.setAttribute('aria-hidden','false');
+                })
+            })
+
+            document.querySelectorAll('.record-item').forEach(card => {
+                card.addEventListener('mousemove', e => {
+                    if(!window.matchMedia('(hover: hover)').matches) return;
+                    const rect = card.getBoundingClientRect();
+                    const xRatio = (e.clientX - rect.left) / rect.width - 0.5;
+                    const yRatio = (e.clientY - rect.top) / rect.height - 0.5;
+                    card.style.setProperty('--tilt-y', `${xRatio * 7}deg`);
+                    card.style.setProperty('--tilt-x', `${-yRatio * 5}deg`);
+                });
+                card.addEventListener('mouseleave', () => {
+                    card.style.setProperty('--tilt-x', '0deg');
+                    card.style.setProperty('--tilt-y', '0deg');
+                });
+            });
+
+            requestAnimationFrame(() => {
+                recordBox.scrollLeft = 0;
+                activateNearestCardByCenter();
+            });
+        }
+
+        recordBox.addEventListener('mousemove', e => {
+            if(window.matchMedia('(hover: hover)').matches) {
+                activateNearestCardByMouse(e.clientX);
+            }
+        });
+
+        recordBox.addEventListener('scroll', () => {
+            clearTimeout(scrollTimer);
+            if(window.matchMedia('(hover: none)').matches) {
+                document.querySelectorAll('.record-item').forEach(card => card.classList.remove('is-active'));
+            }
+            scrollTimer = setTimeout(activateNearestCardByCenter, 150);
+        });
+
+        function closeImagePreview(){
+            imageModal.classList.remove('is-open');
+            imageModal.setAttribute('aria-hidden','true');
+            modalImage.src = "";
+        }
+
+        closeImageModal.addEventListener('click', closeImagePreview);
+        imageModal.addEventListener('click', e => {
+            if(e.target === imageModal) closeImagePreview();
+        });
+        window.addEventListener('keydown', e => {
+            if(e.key === 'Escape' && imageModal.classList.contains('is-open')) closeImagePreview();
+        });
+
+        imgFile.addEventListener('change',function(e){
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(ev){
+                tempImgBase64 = ev.target.result;
+                previewImg.src = tempImgBase64;
+                previewImg.style.display = "block";
+            }
+            reader.readAsDataURL(file);
+        })
+
+        function saveRecord() {
+            const content = textInput.value.trim();
+            if(!content && !tempImgBase64){
+                alert('内容或图片不能为空');
+                return;
+            }
+            const now = new Date();
+            const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+            moodRecords.unshift({
+                time: timeStr,
+                mood: currentMood,
+                content: content,
+                img: tempImgBase64
+            });
+            localStorage.setItem('moodRecords', JSON.stringify(moodRecords));
+            showToast("已悄悄保存 ✦");
+            textInput.value = "";
+            tempImgBase64 = "";
+            previewImg.style.display = "none";
+            imgFile.value = "";
+        }
+
+        backBtn.addEventListener('click', switchToMain);
+        closeRecordBtn.addEventListener('click', switchToMain);
+        openRecordBtn.addEventListener('click', switchToRecord);
+        saveBtn.addEventListener('click', saveRecord);
+
+        function getCenter(){
+            return {
+                x: window.innerWidth / 2,
+                y: window.innerHeight / 2
+            };
+        }
+
+        function getCirclePoints(){
+            const pts = [];
+            const center = getCenter();
+            const radius = Math.min(window.innerHeight, window.innerWidth) / 4;
+            for(let a=0; a<=Math.PI*2; a+=0.08){
+                let x = center.x + Math.cos(a) * radius;
+                let y = center.y + Math.sin(a) * radius;
+                pts.push({x, y});
+            }
+            return pts;
+        }
+
+        function getHeartPoints(){
+            const pts = [];
+            const center = getCenter();
+            for(let t=0;t<=Math.PI*2;t+=0.08){
+                let x = 16*Math.pow(Math.sin(t),3);
+                let y = -(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
+                pts.push({x:center.x+x*9,y:center.y+y*9});
+            }
+            return pts;
+        }
+
+        class Circle {
+            constructor(createTime) {
+                this.el = document.createElement('div');
+                this.el.classList.add('white-circle');
+                this.createTime = createTime;
+                this.radius = Math.random() * 5 + 8;
+                this.size = this.radius * 2;
+                this.x = Math.random() * window.innerWidth;
+                this.y = Math.random() * window.innerHeight;
+                this.speedX = (Math.random() - 0.5) * 1.2;
+                this.speedY = (Math.random() - 0.5) * 1.2;
+                this.mergeCount = 1;
+                this.splitTimer = null;
+                this.originSpeedX = this.speedX;
+                this.originSpeedY = this.speedY;
+                this.status = "normal";
+
+                this.el.style.width = this.size + 'px';
+                this.el.style.height = this.size + 'px';
+                this.updatePos();
+                body.appendChild(this.el);
+            }
+
+            updatePos(){
+                this.el.style.left = this.x - this.radius + 'px';
+                this.el.style.top = this.y - this.radius + 'px';
+            }
+
+            move(){
+                if(isShapeForming) return;
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if(this.x<this.radius||this.x>window.innerWidth-this.radius)this.speedX*=-1;
+                if(this.y<this.radius||this.y>window.innerHeight-this.radius)this.speedY*=-1;
+                this.updatePos();
+            }
+
+            merge(mergeNum,selfIndex){
+                if(mergeNum>maxMergeNum)return false;
+                this.mergeCount=mergeNum;
+                this.radius=8+mergeNum*5;
+                this.size=this.radius*2;
+                this.el.style.width=this.size+'px';
+                this.el.style.height=this.size+'px';
+                if(mergeNum===3){
+                    if(this.splitTimer)clearTimeout(this.splitTimer);
+                    this.splitTimer=setTimeout(()=>splitMergedCircle(this.x,this.y,selfIndex),2000);
+                }
+                return true;
+            }
+
+            checkBtnBounce(){
+                if(isShapeForming || inputPage.style.display === 'flex' || recordPage.style.display === 'flex') return;
+                if(titleRect){
+                    let cx=this.x,cy=this.y;
+                    let rx=titleRect.left,ry=titleRect.top,rw=titleRect.width,rh=titleRect.height;
+                    let clx=Math.max(rx,Math.min(cx,rx+rw));
+                    let cly=Math.max(ry,Math.min(cy,ry+rh));
+                    let dx=cx-clx,dy=cy-cly;
+                    let dist=Math.hypot(dx,dy);
+                    if(dist<this.radius){
+                        let ang=Math.atan2(dy,dx);
+                        this.x+=Math.cos(ang)*(this.radius-dist+10);
+                        this.y+=Math.sin(ang)*(this.radius-dist+10);
+                        this.speedX*=-1.2;this.speedY*=-1.2;
+                    }
+                }
+                for(let rect of btnRects){
+                    let cx=this.x,cy=this.y;
+                    let rx=rect.left,ry=rect.top,rw=rect.width,rh=rect.height;
+                    let clx=Math.max(rx,Math.min(cx,rx+rw));
+                    let cly=Math.max(ry,Math.min(cy,ry+rh));
+                    let dx=cx-clx,dy=cy-cly;
+                    let dist=Math.hypot(dx,dy);
+                    if(dist<this.radius){
+                        let ang=Math.atan2(dy,dx);
+                        this.x+=Math.cos(ang)*(this.radius-dist+8);
+                        this.y+=Math.sin(ang)*(this.radius-dist+8);
+                        this.speedX*=-1.1;this.speedY*=-1.1;
+                    }
+                }
+            }
+
+            destroyTimer(){if(this.splitTimer)clearTimeout(this.splitTimer);this.splitTimer=null;}
+            fadeDisappear(){this.el.classList.add('fade-out');}
+            flyToPoint(px,py){this.x=px;this.y=py;this.updatePos();}
+
+            resetStyle(){
+                this.speedX=this.originSpeedX;
+                this.speedY=this.originSpeedY;
+                this.el.style.background='rgba(255, 251, 255, 0.86)';
+                this.el.style.backgroundImage='radial-gradient(circle, rgba(73,55,95,0.17) 0 1px, transparent 1.2px)';
+                this.el.style.backgroundSize='5px 5px';
+                this.el.style.borderRadius='50%';
+                this.el.textContent='';
+                this.el.classList.remove('mood-glyph', 'glyph-heart', 'glyph-bloom', 'glyph-wing', 'glyph-rain');
+                this.el.classList.remove('butterfly-animate');
+                this.status="normal";
+            }
+
+            setMoodGlyph(symbol,className){
+                this.el.style.background='none';
+                this.el.style.backgroundImage='none';
+                this.el.style.borderRadius='0';
+                this.el.textContent=symbol;
+                this.el.classList.add('mood-glyph', className);
+            }
+
+            rainDrop(){
+                this.speedY=3+Math.random()*2;
+                this.speedX=(Math.random()-0.5)*1;
+                this.setMoodGlyph('◞', 'glyph-rain');
+                this.status="rain";
+            }
+            toHeartEmoji(){
+                this.setMoodGlyph('♥', 'glyph-heart');
+                this.status="heart";
+            }
+            toSakuraEmoji(){
+                this.setMoodGlyph('✿', 'glyph-bloom');
+                this.status="sakura";
+            }
+            toButterflyFly(){
+                this.setMoodGlyph('⋈', 'glyph-wing');
+                this.el.classList.add('butterfly-animate');
+                this.status="butterfly";
+                this.x += (Math.random()-0.5)*30;
+                this.y += (Math.random()-0.5)*30;
+                this.updatePos();
+            }
+        }
+
+        function formCircleShape(){
+            if(isShapeForming||isResetting)return;
+            count1++;
+            refreshShow();saveData();
+            isShapeForming=true;
+            const pts=getCirclePoints();
+            const len=Math.min(circleList.length,pts.length);
+            for(let i=0;i<len;i++){
+                circleList[i].flyToPoint(pts[i].x,pts[i].y);
+                circleList[i].toHeartEmoji();
+            }
+            setTimeout(()=>{
+                circleList.forEach(c=>c.resetStyle());
+                isShapeForming=false;
+                switchToInput('心动');
+            },2000);
+        }
+
+        function formHeartShape(){
+            if(isShapeForming||isResetting)return;
+            count2++;
+            refreshShow();saveData();
+            isShapeForming=true;
+            const pts=getHeartPoints();
+            const len=Math.min(circleList.length,pts.length);
+            for(let i=0;i<len;i++){
+                circleList[i].flyToPoint(pts[i].x,pts[i].y);
+                circleList[i].toSakuraEmoji();
+            }
+            setTimeout(()=>{
+                circleList.forEach(c=>c.resetStyle());
+                isShapeForming=false;
+                switchToInput('开心');
+            },2000);
+        }
+
+        function formButterflyFly(){
+            if(isShapeForming||isResetting)return;
+            count3++;
+            refreshShow();saveData();
+            isShapeForming=true;
+            circleList.forEach(dot=>{
+                dot.toButterflyFly();
+            });
+            setTimeout(()=>{
+                circleList.forEach(c=>c.resetStyle());
+                isShapeForming=false;
+                switchToInput('自由');
+            },2000);
+        }
+
+        function startRain(){
+            if(isShapeForming||isResetting)return;
+            count4++;
+            refreshShow();saveData();
+            circleList.forEach(item=>item.rainDrop());
+            setTimeout(()=>{
+                circleList.forEach(c=>c.resetStyle());
+                switchToInput('伤心');
+            },2000);
+        }
+
+        function bindHoldAction(btn,action){
+            const holdMs = 1050;
+            const drainMs = 520;
+            let holdFrame = null;
+            let drainFrame = null;
+            let holdStartedAt = 0;
+            let waterLevel = 0;
+            let completed = false;
+            let activePointerId = null;
+
+            function vibrate(pattern){
+                if(navigator.vibrate) navigator.vibrate(pattern);
+            }
+
+            function setWater(value){
+                const nextLevel = Math.max(0, Math.min(100, value));
+                const delta = nextLevel - waterLevel;
+                waterLevel = nextLevel;
+                btn.style.setProperty('--water', `${waterLevel}%`);
+                btn.style.setProperty('--liquid-tilt', `${Math.max(-3.8, Math.min(3.8, delta * 0.22))}deg`);
+                clearTimeout(btn._liquidTiltTimer);
+                btn._liquidTiltTimer = setTimeout(() => {
+                    btn.style.setProperty('--liquid-tilt', '0deg');
+                }, 120);
+            }
+
+            function stopFrames(){
+                cancelAnimationFrame(holdFrame);
+                cancelAnimationFrame(drainFrame);
+                holdFrame = null;
+                drainFrame = null;
+            }
+
+            function drainWater(){
+                cancelAnimationFrame(drainFrame);
+                const from = waterLevel;
+                const started = performance.now();
+                function tick(now){
+                    const progress = Math.min(1, (now - started) / drainMs);
+                    setWater(from * (1 - progress));
+                    if(progress < 1) {
+                        drainFrame = requestAnimationFrame(tick);
+                    }
+                }
+                drainFrame = requestAnimationFrame(tick);
+            }
+
+            function releasePointer(){
+                if(activePointerId !== null && btn.hasPointerCapture?.(activePointerId)) {
+                    btn.releasePointerCapture(activePointerId);
+                }
+                activePointerId = null;
+            }
+
+            function cancelHold(shouldDrain = true){
+                cancelAnimationFrame(holdFrame);
+                holdFrame = null;
+                btn.classList.remove('is-holding');
+                releasePointer();
+                if(shouldDrain) drainWater();
+            }
+
+            btn.setAttribute('role','button');
+            btn.setAttribute('tabindex','0');
+
+            btn.addEventListener('pointerdown', e => {
+                if(e.button !== 0 || isShapeForming || isResetting) return;
+                e.preventDefault();
+                stopFrames();
+                completed = false;
+                setWater(waterLevel);
+                activePointerId = e.pointerId;
+                btn.setPointerCapture?.(e.pointerId);
+                btn.classList.add('is-holding');
+                vibrate(12);
+                holdStartedAt = performance.now() - (waterLevel / 100) * holdMs;
+
+                function fillTick(now){
+                    if(completed) return;
+                    const progress = Math.min(1, (now - holdStartedAt) / holdMs);
+                    setWater(progress * 100);
+                    if(progress >= 1){
+                        completed = true;
+                        cancelHold(false);
+                        btn.classList.add('hold-complete');
+                        vibrate([18, 28, 30]);
+                        action();
+                        setTimeout(() => {
+                            btn.classList.remove('hold-complete');
+                            drainWater();
+                        }, 420);
+                        return;
+                    }
+                    holdFrame = requestAnimationFrame(fillTick);
+                }
+                holdFrame = requestAnimationFrame(fillTick);
+            });
+
+            btn.addEventListener('pointerup', () => {
+                if(completed) return;
+                cancelHold(true);
+            });
+            btn.addEventListener('pointercancel', () => cancelHold(true));
+            btn.addEventListener('pointerleave', () => {
+                if(!completed) cancelHold(true);
+            });
+            btn.addEventListener('keydown', e => {
+                if((e.key === 'Enter' || e.key === ' ') && !isShapeForming && !isResetting){
+                    e.preventDefault();
+                    action();
+                }
+            });
+            btn.addEventListener('contextmenu', e => e.preventDefault());
+        }
+
+        bindHoldAction(document.getElementById('btnFlower'),formCircleShape);
+        bindHoldAction(document.getElementById('btnGirl'),formHeartShape);
+        bindHoldAction(document.getElementById('btnButterfly'),formButterflyFly);
+        bindHoldAction(document.getElementById('btnRain'),startRain);
+
+        function keepMinCount(){
+            while(circleList.length < minCount){
+                const newDot = new Circle(Date.now());
+                circleList.push(newDot);
+            }
+        }
+
+        function gentleTrim() {
+            if (circleList.length > maxLimit) {
+                const removeCount = 20;
+                const toRemove = circleList.slice(0, removeCount);
+                toRemove.forEach(item => {
+                    item.destroyTimer();
+                    item.fadeDisappear();
+                    setTimeout(() => body.removeChild(item.el), 1500);
+                });
+                circleList = circleList.slice(removeCount);
+            }
+            keepMinCount();
+        }
+
+        function splitMergedCircle(centerX, centerY, index) {
+            if (index < 0 || index >= circleList.length) return;
+            const target = circleList[index];
+            target.destroyTimer();
+
+            body.removeChild(target.el);
+            circleList.splice(index, 1);
+
+            for (let i = 0; i < 3; i++) {
+                const small = new Circle(Date.now());
+                small.radius = Math.random() * 3 + 3;
+                small.size = small.radius * 2;
+                const angle = (Math.PI * 2 / 3) * i;
+                const dis = 35;
+                small.x = centerX + Math.cos(angle) * dis;
+                small.y = centerY + Math.sin(angle) * dis;
+                small.speedX = Math.cos(angle) * 1.5;
+                small.speedY = Math.sin(angle) * 1.5;
+                small.el.style.width = small.size + 'px';
+                small.el.style.height = small.size + 'px';
+                small.updatePos();
+                circleList.push(small);
+            }
+            keepMinCount();
+        }
+
+        function orderSplit() {
+            const sortedCircles = [...circleList].sort((a,b) => a.createTime - b.createTime);
+            let index = 0;
+            function singleSplit(){
+                if(index >= sortedCircles.length) return;
+                const currItem = sortedCircles[index];
+                const posX = currItem.x;
+                const posY = currItem.y;
+                currItem.destroyTimer();
+                body.removeChild(currItem.el);
+                const delIdx = circleList.findIndex(s => s === currItem);
+                if(delIdx > -1) circleList.splice(delIdx,1);
+                const smallNum = 6;
+                for(let i=0;i<smallNum;i++){
+                    const small = new Circle(Date.now());
+                    small.radius = Math.random() * 3 + 2;
+                    small.size = small.radius * 2;
+                    small.x = posX + (Math.random()-0.5)*40;
+                    small.y = posY + (Math.random()-0.5)*40;
+                    small.el.style.width = small.size + 'px';
+                    small.el.style.height = small.size + 'px';
+                    small.updatePos();
+                    circleList.push(small);
+                }
+                keepMinCount();
+                index++;
+                setTimeout(singleSplit, splitInterval);
+            }
+            singleSplit();
+        }
+
+        function initCircles() {
+            circleList.forEach(item => {
+                item.destroyTimer();
+                body.removeChild(item.el);
+            });
+            circleList = [];
+            const now = Date.now();
+            for(let i = 0; i < initCount; i++) {
+                circleList.push(new Circle(now + i * 100));
+            }
+            refreshBtnRect();
+            refreshTitleRect();
+        }
+
+        function refreshBtnRect() {
+            const btns = document.querySelectorAll('.capsule-btn');
+            const readBtn = document.getElementById('openRecordBtn');
+            btnRects = Array.from(btns).map(item => item.getBoundingClientRect());
+            btnRects.push(readBtn.getBoundingClientRect());
+        }
+
+        function checkCollision() {
+            if(isShapeForming) return;
+            for(let i = 0; i < circleList.length; i++) {
+                for(let j = i + 1; j < circleList.length; j++) {
+                    const c1 = circleList[i];
+                    const c2 = circleList[j];
+                    const dx = c1.x - c2.x;
+                    const dy = c1.y - c2.y;
+                    const dist = Math.hypot(dx, dy);
+                    if(dist < c1.radius + c2.radius) {
+                        const total = c1.mergeCount + c2.mergeCount;
+                        if(total > maxLimit) continue;
+                        const newX = (c1.x + c2.x) / 2;
+                        const newY = (c1.y + c2.y) / 2;
+                        c1.x = newX;
+                        c1.y = newY;
+                        c1.merge(total, i);
+                        body.removeChild(c2.el);
+                        circleList.splice(j, 1);
+                        keepMinCount();
+                        return;
+                    }
+                }
+            }
+        }
+
+        function animate() {
+            gentleTrim();
+            refreshBtnRect();
+            refreshTitleRect();
+            circleList.forEach(item => {
+                item.checkBtnBounce();
+                item.move();
+            });
+            checkCollision();
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('load', () => {
+            initCircles();
+            animate();
+            setInterval(orderSplit, 3000);
+        });
+
+        window.addEventListener('resize', () => {
+            refreshBtnRect();
+            refreshTitleRect();
+            circleList.forEach(item => item.updatePos());
+        })
+    </script>
+</body>
+</html>
+
