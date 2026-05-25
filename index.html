@@ -615,6 +615,8 @@
 
         .white-circle {
             position: absolute;
+            left: 0;
+            top: 0;
             border-radius: 50%;
             background:
                 radial-gradient(circle, rgba(73,55,95,0.17) 0 1px, transparent 1.2px),
@@ -629,6 +631,8 @@
             font-size: 24px;
             pointer-events: none;
             color: var(--ink);
+            will-change: transform;
+            contain: layout paint;
         }
         .mood-glyph {
             background: none !important;
@@ -779,7 +783,7 @@
     </div>
 
     <div class="main-page" id="mainPage">
-        <div class="home-hint">长按一个心情，记录此刻</div>
+        <div class="home-hint">点击一个心情，记录此刻</div>
         <div class="btn-row">
             <div class="capsule-btn" id="btnFlower">
                 <span class="water-fill"></span>
@@ -841,16 +845,31 @@
     <script>
         const body = document.body;
         const maxMergeNum = 3;
-        const maxLimit = 300;
-        const minCount = 80;
-        const initCount = 80;
-        const splitInterval = 35;
+        const isCompactViewport = Math.min(window.innerWidth, window.innerHeight) <= 640;
+        const isTouchLike = window.matchMedia('(hover: none), (pointer: coarse)').matches || isCompactViewport;
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const particleConfig = {
+            maxLimit: reduceMotion ? 48 : (isTouchLike ? 90 : 150),
+            minCount: reduceMotion ? 24 : (isTouchLike ? 36 : 56),
+            initCount: reduceMotion ? 24 : (isTouchLike ? 36 : 56),
+            splitBatch: reduceMotion ? 0 : (isTouchLike ? 4 : 8),
+            splitChildren: isTouchLike ? 3 : 4,
+            splitInterval: isTouchLike ? 120 : 80,
+            splitEveryMs: isTouchLike ? 6500 : 5200,
+            collisionEveryFrames: isTouchLike ? 5 : 3,
+            rectEveryFrames: isTouchLike ? 12 : 6
+        };
+        const maxLimit = particleConfig.maxLimit;
+        const minCount = particleConfig.minCount;
+        const initCount = particleConfig.initCount;
+        const splitInterval = particleConfig.splitInterval;
         let circleList = [];
         let btnRects = [];
         let titleRect = null;
         let isResetting = false;
         let isShapeForming = false;
         let tempImgBase64 = "";
+        let frameCount = 0;
 
         const mainPage = document.getElementById('mainPage');
         const inputPage = document.getElementById('inputPage');
@@ -879,6 +898,12 @@
         const num2Dom = document.getElementById('num2');
         const num3Dom = document.getElementById('num3');
         const num4Dom = document.getElementById('num4');
+
+        function safeRemove(el) {
+            if(el && el.parentNode) {
+                el.parentNode.removeChild(el);
+            }
+        }
 
         function animateTitle() {
             titleLetters.forEach((letter, i) => {
@@ -949,6 +974,7 @@
 
         function switchToInput(mood = '') {
             setCurrentMood(mood || currentMood);
+            titleDom.style.display = 'none';
             mainPage.style.display = 'none';
             inputPage.style.display = 'flex';
             tempImgBase64 = "";
@@ -960,12 +986,14 @@
             inputPage.style.display = 'none';
             recordPage.style.display = 'none';
             mainPage.style.display = 'flex';
+            titleDom.style.display = 'flex';
             textInput.value = '';
             tempImgBase64 = "";
             previewImg.style.display = "none";
             setCurrentMood('');
         }
         function switchToRecord() {
+            titleDom.style.display = 'none';
             mainPage.style.display = 'none';
             recordPage.style.display = 'flex';
             renderRecord();
@@ -1030,7 +1058,7 @@
         function renderRecord() {
             recordBox.classList.toggle('is-empty', moodRecords.length === 0);
             if(moodRecords.length === 0) {
-                recordBox.innerHTML = `<div class="empty-record">还没有留下心情<br>长按一个心情，写下第一张 Love Note 吧</div>`;
+                recordBox.innerHTML = `<div class="empty-record">还没有留下心情<br>点击一个心情，写下第一张 Love Note 吧</div>`;
                 return;
             }
             let html = "";
@@ -1211,8 +1239,7 @@
             }
 
             updatePos(){
-                this.el.style.left = this.x - this.radius + 'px';
-                this.el.style.top = this.y - this.radius + 'px';
+                this.el.style.transform = `translate3d(${this.x - this.radius}px, ${this.y - this.radius}px, 0)`;
             }
 
             move(){
@@ -1231,7 +1258,7 @@
                 this.size=this.radius*2;
                 this.el.style.width=this.size+'px';
                 this.el.style.height=this.size+'px';
-                if(mergeNum===3){
+                if(mergeNum===3 && !isTouchLike && !reduceMotion){
                     if(this.splitTimer)clearTimeout(this.splitTimer);
                     this.splitTimer=setTimeout(()=>splitMergedCircle(this.x,this.y,selfIndex),2000);
                 }
@@ -1381,51 +1408,16 @@
             },2000);
         }
 
-        function bindHoldAction(btn,action){
-            const holdMs = 1050;
-            const drainMs = 520;
-            let holdFrame = null;
-            let drainFrame = null;
-            let holdStartedAt = 0;
-            let waterLevel = 0;
-            let completed = false;
+        function bindTapAction(btn,action){
+            const tapMaxMs = 480;
+            const longPressMs = 520;
+            let pressStartedAt = 0;
+            let longPressTimer = null;
             let activePointerId = null;
+            let longPressCancelled = false;
 
             function vibrate(pattern){
                 if(navigator.vibrate) navigator.vibrate(pattern);
-            }
-
-            function setWater(value){
-                const nextLevel = Math.max(0, Math.min(100, value));
-                const delta = nextLevel - waterLevel;
-                waterLevel = nextLevel;
-                btn.style.setProperty('--water', `${waterLevel}%`);
-                btn.style.setProperty('--liquid-tilt', `${Math.max(-3.8, Math.min(3.8, delta * 0.22))}deg`);
-                clearTimeout(btn._liquidTiltTimer);
-                btn._liquidTiltTimer = setTimeout(() => {
-                    btn.style.setProperty('--liquid-tilt', '0deg');
-                }, 120);
-            }
-
-            function stopFrames(){
-                cancelAnimationFrame(holdFrame);
-                cancelAnimationFrame(drainFrame);
-                holdFrame = null;
-                drainFrame = null;
-            }
-
-            function drainWater(){
-                cancelAnimationFrame(drainFrame);
-                const from = waterLevel;
-                const started = performance.now();
-                function tick(now){
-                    const progress = Math.min(1, (now - started) / drainMs);
-                    setWater(from * (1 - progress));
-                    if(progress < 1) {
-                        drainFrame = requestAnimationFrame(tick);
-                    }
-                }
-                drainFrame = requestAnimationFrame(tick);
             }
 
             function releasePointer(){
@@ -1435,12 +1427,13 @@
                 activePointerId = null;
             }
 
-            function cancelHold(shouldDrain = true){
-                cancelAnimationFrame(holdFrame);
-                holdFrame = null;
+            function resetPressState(){
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
                 btn.classList.remove('is-holding');
                 releasePointer();
-                if(shouldDrain) drainWater();
+                btn.style.setProperty('--water', '0%');
+                btn.style.setProperty('--liquid-tilt', '0deg');
             }
 
             btn.setAttribute('role','button');
@@ -1449,44 +1442,33 @@
             btn.addEventListener('pointerdown', e => {
                 if(e.button !== 0 || isShapeForming || isResetting) return;
                 e.preventDefault();
-                stopFrames();
-                completed = false;
-                setWater(waterLevel);
+                clearTimeout(longPressTimer);
+                pressStartedAt = performance.now();
+                longPressCancelled = false;
                 activePointerId = e.pointerId;
                 btn.setPointerCapture?.(e.pointerId);
                 btn.classList.add('is-holding');
+                btn.style.setProperty('--water', '35%');
                 vibrate(12);
-                holdStartedAt = performance.now() - (waterLevel / 100) * holdMs;
-
-                function fillTick(now){
-                    if(completed) return;
-                    const progress = Math.min(1, (now - holdStartedAt) / holdMs);
-                    setWater(progress * 100);
-                    if(progress >= 1){
-                        completed = true;
-                        cancelHold(false);
-                        btn.classList.add('hold-complete');
-                        vibrate([18, 28, 30]);
-                        action();
-                        setTimeout(() => {
-                            btn.classList.remove('hold-complete');
-                            drainWater();
-                        }, 420);
-                        return;
-                    }
-                    holdFrame = requestAnimationFrame(fillTick);
-                }
-                holdFrame = requestAnimationFrame(fillTick);
+                longPressTimer = setTimeout(() => {
+                    longPressCancelled = true;
+                    btn.style.setProperty('--water', '0%');
+                    btn.classList.remove('is-holding');
+                }, longPressMs);
             });
 
-            btn.addEventListener('pointerup', () => {
-                if(completed) return;
-                cancelHold(true);
+            btn.addEventListener('pointerup', e => {
+                const elapsed = performance.now() - pressStartedAt;
+                const shouldTrigger = !longPressCancelled && elapsed <= tapMaxMs && !isShapeForming && !isResetting;
+                resetPressState();
+                if(!shouldTrigger) return;
+                btn.classList.add('hold-complete');
+                vibrate([14, 22, 18]);
+                action();
+                setTimeout(() => btn.classList.remove('hold-complete'), 360);
             });
-            btn.addEventListener('pointercancel', () => cancelHold(true));
-            btn.addEventListener('pointerleave', () => {
-                if(!completed) cancelHold(true);
-            });
+            btn.addEventListener('pointercancel', resetPressState);
+            btn.addEventListener('pointerleave', resetPressState);
             btn.addEventListener('keydown', e => {
                 if((e.key === 'Enter' || e.key === ' ') && !isShapeForming && !isResetting){
                     e.preventDefault();
@@ -1496,10 +1478,10 @@
             btn.addEventListener('contextmenu', e => e.preventDefault());
         }
 
-        bindHoldAction(document.getElementById('btnFlower'),formCircleShape);
-        bindHoldAction(document.getElementById('btnGirl'),formHeartShape);
-        bindHoldAction(document.getElementById('btnButterfly'),formButterflyFly);
-        bindHoldAction(document.getElementById('btnRain'),startRain);
+        bindTapAction(document.getElementById('btnFlower'),formCircleShape);
+        bindTapAction(document.getElementById('btnGirl'),formHeartShape);
+        bindTapAction(document.getElementById('btnButterfly'),formButterflyFly);
+        bindTapAction(document.getElementById('btnRain'),startRain);
 
         function keepMinCount(){
             while(circleList.length < minCount){
@@ -1510,12 +1492,12 @@
 
         function gentleTrim() {
             if (circleList.length > maxLimit) {
-                const removeCount = 20;
+                const removeCount = Math.min(12, circleList.length - maxLimit);
                 const toRemove = circleList.slice(0, removeCount);
                 toRemove.forEach(item => {
                     item.destroyTimer();
                     item.fadeDisappear();
-                    setTimeout(() => body.removeChild(item.el), 1500);
+                    setTimeout(() => safeRemove(item.el), 1500);
                 });
                 circleList = circleList.slice(removeCount);
             }
@@ -1527,7 +1509,7 @@
             const target = circleList[index];
             target.destroyTimer();
 
-            body.removeChild(target.el);
+            safeRemove(target.el);
             circleList.splice(index, 1);
 
             for (let i = 0; i < 3; i++) {
@@ -1549,19 +1531,26 @@
         }
 
         function orderSplit() {
+            if(particleConfig.splitBatch <= 0 || isShapeForming || inputPage.style.display === 'flex' || recordPage.style.display === 'flex') return;
             const sortedCircles = [...circleList].sort((a,b) => a.createTime - b.createTime);
             let index = 0;
             function singleSplit(){
-                if(index >= sortedCircles.length) return;
+                if(index >= sortedCircles.length || index >= particleConfig.splitBatch) return;
                 const currItem = sortedCircles[index];
+                const delIdx = circleList.findIndex(s => s === currItem);
+                if(delIdx === -1 || !currItem.el.parentNode) {
+                    index++;
+                    setTimeout(singleSplit, splitInterval);
+                    return;
+                }
                 const posX = currItem.x;
                 const posY = currItem.y;
                 currItem.destroyTimer();
-                body.removeChild(currItem.el);
-                const delIdx = circleList.findIndex(s => s === currItem);
-                if(delIdx > -1) circleList.splice(delIdx,1);
-                const smallNum = 6;
+                safeRemove(currItem.el);
+                circleList.splice(delIdx,1);
+                const smallNum = particleConfig.splitChildren;
                 for(let i=0;i<smallNum;i++){
+                    if(circleList.length >= maxLimit) break;
                     const small = new Circle(Date.now());
                     small.radius = Math.random() * 3 + 2;
                     small.size = small.radius * 2;
@@ -1582,7 +1571,7 @@
         function initCircles() {
             circleList.forEach(item => {
                 item.destroyTimer();
-                body.removeChild(item.el);
+                safeRemove(item.el);
             });
             circleList = [];
             const now = Date.now();
@@ -1594,6 +1583,7 @@
         }
 
         function refreshBtnRect() {
+            if(inputPage.style.display === 'flex' || recordPage.style.display === 'flex') return;
             const btns = document.querySelectorAll('.capsule-btn');
             const readBtn = document.getElementById('openRecordBtn');
             btnRects = Array.from(btns).map(item => item.getBoundingClientRect());
@@ -1611,13 +1601,13 @@
                     const dist = Math.hypot(dx, dy);
                     if(dist < c1.radius + c2.radius) {
                         const total = c1.mergeCount + c2.mergeCount;
-                        if(total > maxLimit) continue;
+                        if(total > maxMergeNum) continue;
                         const newX = (c1.x + c2.x) / 2;
                         const newY = (c1.y + c2.y) / 2;
                         c1.x = newX;
                         c1.y = newY;
-                        c1.merge(total, i);
-                        body.removeChild(c2.el);
+                        if(!c1.merge(total, i)) continue;
+                        safeRemove(c2.el);
                         circleList.splice(j, 1);
                         keepMinCount();
                         return;
@@ -1627,21 +1617,26 @@
         }
 
         function animate() {
+            frameCount++;
             gentleTrim();
-            refreshBtnRect();
-            refreshTitleRect();
+            if(frameCount % particleConfig.rectEveryFrames === 0) {
+                refreshBtnRect();
+                refreshTitleRect();
+            }
             circleList.forEach(item => {
                 item.checkBtnBounce();
                 item.move();
             });
-            checkCollision();
+            if(frameCount % particleConfig.collisionEveryFrames === 0) {
+                checkCollision();
+            }
             requestAnimationFrame(animate);
         }
 
         window.addEventListener('load', () => {
             initCircles();
             animate();
-            setInterval(orderSplit, 3000);
+            setInterval(orderSplit, particleConfig.splitEveryMs);
         });
 
         window.addEventListener('resize', () => {
@@ -1652,4 +1647,3 @@
     </script>
 </body>
 </html>
-
