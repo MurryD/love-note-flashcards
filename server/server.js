@@ -85,7 +85,11 @@ app.post('/api/records', upload.single('image'), (req, res) => {
     const records = readRecords();
     records.unshift(record);
     writeRecords(records);
-    res.status(201).json(record);
+    const host = `${req.protocol}://${req.get('host')}`;
+    res.status(201).json({
+      ...record,
+      img: record.img ? `${host}/uploads/${record.img}` : null
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
