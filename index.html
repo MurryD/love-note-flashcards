@@ -986,7 +986,8 @@
         });
 
         let moodRecords = [];
-        const API_BASE = 'http://localhost:3000';
+        const API_BASE = (window.location.hostname === 'localhost' || window.location.protocol === 'file:')
+            ? 'http://localhost:3000' : '';
         let apiAvailable = false;
 
         async function loadRecords(){

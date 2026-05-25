@@ -21,6 +21,11 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+// 前端静态文件（Railway 部署时一体提供）
+const FRONTEND_DIR = path.join(__dirname, '..');
+app.use(express.static(FRONTEND_DIR));
+app.get('/', (req, res) => res.sendFile(path.join(FRONTEND_DIR, 'index.html')));
+
 // ── multer 配置 ───────────────────────────────────────
 const storage = multer.diskStorage({
   destination: UPLOADS_DIR,
