@@ -2,18 +2,10 @@ const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { put, del, list } = require('@vercel/blob');
 
 const app = express();
-
-// /tmp 作为缓存，真数据在 Vercel Blob
-const DATA_DIR = path.join('/tmp', 'data');
-const RECORDS_FILE = path.join(DATA_DIR, 'records.json');
-const BLOB_RECORDS_PATH = 'data/records.json';
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
 app.use(cors());
 app.use(express.json());
 
@@ -26,45 +18,29 @@ const upload = multer({
   }
 });
 
-function readRecordsLocal() {
-  try { return JSON.parse(fs.readFileSync(RECORDS_FILE, 'utf-8')); }
-  catch { return []; }
-}
-function writeRecordsLocal(records) {
-  fs.writeFileSync(RECORDS_FILE, JSON.stringify(records, null, 2), 'utf-8');
-}
-
-// 从 Vercel Blob 同步记录到本地缓存
-async function syncRecordsFromBlob() {
+// 从 Blob 拉取所有卡片（每张卡一个文件，天然无写入冲突）
+async function getAllCards() {
   try {
-    const { blobs } = await list({ prefix: 'data/' });
-    const rec = blobs.find(b => b.pathname === BLOB_RECORDS_PATH);
-    if (rec) {
-      const resp = await fetch(rec.url);
-      const records = await resp.json();
-      writeRecordsLocal(records);
-      return records;
+    const { blobs } = await list({ prefix: 'cards/' });
+    const cards = [];
+    for (const b of blobs) {
+      try {
+        const resp = await fetch(b.url);
+        const card = await resp.json();
+        card._blobUrl = b.url;
+        cards.push(card);
+      } catch {} // 单个卡片损坏不阻塞
     }
-  } catch {}
-  return readRecordsLocal();
-}
-
-// 保存记录到 Vercel Blob + 本地缓存
-async function saveRecordsToBlob(records) {
-  writeRecordsLocal(records);
-  try {
-    await put(BLOB_RECORDS_PATH, JSON.stringify(records, null, 2), {
-      access: 'public',
-      contentType: 'application/json',
-      addRandomSuffix: false
-    });
-  } catch {}
+    cards.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
+    // 去掉内部字段
+    return cards.map(({ _blobUrl, ...card }) => card);
+  } catch { return []; }
 }
 
 // 获取所有记录
 app.get('/api/records', async (req, res) => {
   try {
-    const records = await syncRecordsFromBlob();
+    const records = await getAllCards();
     res.json(records);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -92,17 +68,19 @@ app.post('/api/records', upload.single('image'), async (req, res) => {
       imgUrl = blob.url;
     }
 
-    const record = {
+    const card = {
       id: uuidv4(),
       time: timeStr,
       mood: mood || '',
       content: content || '',
       img: imgUrl
     };
-    const records = await syncRecordsFromBlob();
-    records.unshift(record);
-    await saveRecordsToBlob(records);
-    res.status(201).json(record);
+    // 每张卡存成独立文件 → 并发安全
+    await put(`cards/${timeStr.replace(/[:\s]/g, '-')}-${card.id.slice(0, 8)}.json`,
+      JSON.stringify(card, null, 2),
+      { access: 'public', contentType: 'application/json', addRandomSuffix: false }
+    );
+    res.status(201).json(card);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -111,15 +89,19 @@ app.post('/api/records', upload.single('image'), async (req, res) => {
 // 删除记录
 app.delete('/api/records/:id', async (req, res) => {
   try {
-    const records = await syncRecordsFromBlob();
-    const idx = records.findIndex(r => r.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: '记录不存在' });
-    const record = records[idx];
-    if (record.img && record.img.includes('public.blob.vercel-storage.com')) {
-      try { await del(record.img); } catch {}
-    }
-    records.splice(idx, 1);
-    await saveRecordsToBlob(records);
+    const { blobs } = await list({ prefix: 'cards/' });
+    const blob = blobs.find(b => b.pathname.includes(req.params.id));
+    if (!blob) return res.status(404).json({ error: '记录不存在' });
+
+    // 读取卡片，删除关联图片
+    try {
+      const resp = await fetch(blob.url);
+      const card = await resp.json();
+      if (card.img && card.img.includes('public.blob.vercel-storage.com')) {
+        try { await del(card.img); } catch {}
+      }
+    } catch {}
+    await del(blob.url);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
