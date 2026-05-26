@@ -26,13 +26,17 @@
 
         body {
             width: 100vw;
-            height: 100vh;
+            height: 100dvh;
             background:
                 radial-gradient(circle at 18% 72%, rgba(255, 224, 242, 0.84) 0 12%, transparent 28%),
                 radial-gradient(circle at 78% 28%, rgba(249, 218, 238, 0.76) 0 10%, transparent 27%),
                 linear-gradient(145deg, #f7effa 0%, #e8e0f6 45%, #f3e3ef 100%);
             overflow: hidden;
-            position: relative;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            touch-action: manipulation;
+            overscroll-behavior: none;
+            -webkit-overflow-scrolling: auto;
             font-family: var(--text-font);
             color: var(--ink);
         }
@@ -743,7 +747,14 @@
             .main-page { gap: 18px; }
             .btn-row { gap: 20px; }
             .btn-row + .btn-row { margin-top: 0; }
-            .capsule-btn { min-width: 132px; padding: 13px 30px 12px; }
+            .capsule-btn {
+                min-width: 132px; padding: 13px 30px 12px;
+                animation: none;
+            }
+            .capsule-btn::before { animation: none; }
+            .water-fill { animation: none; }
+            .water-fill::before, .water-fill::after { animation: none; }
+            body::before, body::after { opacity: 0.15; }
             .record-page { padding-top: 82px; }
             .record-content { padding: 28px 12vw; }
             .record-item { flex-basis: 76vw; height: min(62vh, 500px); }
@@ -845,15 +856,15 @@
         const isTouchLike = window.matchMedia('(hover: none), (pointer: coarse)').matches || isCompactViewport;
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const particleConfig = {
-            maxLimit: reduceMotion ? 48 : (isTouchLike ? 90 : 150),
-            minCount: reduceMotion ? 24 : (isTouchLike ? 36 : 56),
-            initCount: reduceMotion ? 24 : (isTouchLike ? 36 : 56),
-            splitBatch: reduceMotion ? 0 : (isTouchLike ? 4 : 8),
-            splitChildren: isTouchLike ? 3 : 4,
-            splitInterval: isTouchLike ? 120 : 80,
-            splitEveryMs: isTouchLike ? 6500 : 5200,
-            collisionEveryFrames: isTouchLike ? 5 : 3,
-            rectEveryFrames: isTouchLike ? 12 : 6
+            maxLimit: reduceMotion ? 12 : (isTouchLike ? 24 : 150),
+            minCount: reduceMotion ? 8 : (isTouchLike ? 14 : 56),
+            initCount: reduceMotion ? 8 : (isTouchLike ? 14 : 56),
+            splitBatch: reduceMotion ? 0 : (isTouchLike ? 0 : 8),
+            splitChildren: isTouchLike ? 2 : 4,
+            splitInterval: isTouchLike ? 200 : 80,
+            splitEveryMs: isTouchLike ? 12000 : 5200,
+            collisionEveryFrames: reduceMotion ? 999 : (isTouchLike ? 999 : 3),
+            rectEveryFrames: isTouchLike ? 20 : 6
         };
         const maxLimit = particleConfig.maxLimit;
         const minCount = particleConfig.minCount;
@@ -867,7 +878,7 @@
         let isGathering = false;
         let burstParticles = [];
         const burstConfig = {
-            count: reduceMotion ? 8 : (isTouchLike ? 24 : 36),
+            count: reduceMotion ? 4 : (isTouchLike ? 10 : 36),
             speedMin: 3,
             speedMax: 8,
             friction: 0.96,
@@ -927,7 +938,7 @@
                 });
             }, 1200);
         }
-        setInterval(animateTitle, 3000);
+        if(!isTouchLike) setInterval(animateTitle, 3000);
 
         function refreshTitleRect(){
             titleRect = titleDom.getBoundingClientRect();
