@@ -4,20 +4,19 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const { put, del } = require('@vercel/blob');
+const { put, del, list } = require('@vercel/blob');
 
 const app = express();
 
-// records.json 存 /tmp（文字数据很轻量，且客户端 localStorage 镜像兜底）
+// /tmp 作为缓存，真数据在 Vercel Blob
 const DATA_DIR = path.join('/tmp', 'data');
 const RECORDS_FILE = path.join(DATA_DIR, 'records.json');
+const BLOB_RECORDS_PATH = 'data/records.json';
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(RECORDS_FILE)) fs.writeFileSync(RECORDS_FILE, '[]', 'utf-8');
 
 app.use(cors());
 app.use(express.json());
 
-// multer 改为内存存储（buffer 直接传 Vercel Blob）
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -27,21 +26,52 @@ const upload = multer({
   }
 });
 
-function readRecords() {
+function readRecordsLocal() {
   try { return JSON.parse(fs.readFileSync(RECORDS_FILE, 'utf-8')); }
   catch { return []; }
 }
-function writeRecords(records) {
+function writeRecordsLocal(records) {
   fs.writeFileSync(RECORDS_FILE, JSON.stringify(records, null, 2), 'utf-8');
 }
 
-// 获取所有记录（img 已经是云端 URL，直接返回）
-app.get('/api/records', (req, res) => {
-  const records = readRecords();
-  res.json(records);
+// 从 Vercel Blob 同步记录到本地缓存
+async function syncRecordsFromBlob() {
+  try {
+    const { blobs } = await list({ prefix: 'data/' });
+    const rec = blobs.find(b => b.pathname === BLOB_RECORDS_PATH);
+    if (rec) {
+      const resp = await fetch(rec.url);
+      const records = await resp.json();
+      writeRecordsLocal(records);
+      return records;
+    }
+  } catch {}
+  return readRecordsLocal();
+}
+
+// 保存记录到 Vercel Blob + 本地缓存
+async function saveRecordsToBlob(records) {
+  writeRecordsLocal(records);
+  try {
+    await put(BLOB_RECORDS_PATH, JSON.stringify(records, null, 2), {
+      access: 'public',
+      contentType: 'application/json',
+      addRandomSuffix: false
+    });
+  } catch {}
+}
+
+// 获取所有记录
+app.get('/api/records', async (req, res) => {
+  try {
+    const records = await syncRecordsFromBlob();
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// 新建记录 —— 图片上传到 Vercel Blob
+// 新建记录
 app.post('/api/records', upload.single('image'), async (req, res) => {
   try {
     const { mood, content } = req.body;
@@ -69,28 +99,27 @@ app.post('/api/records', upload.single('image'), async (req, res) => {
       content: content || '',
       img: imgUrl
     };
-    const records = readRecords();
+    const records = await syncRecordsFromBlob();
     records.unshift(record);
-    writeRecords(records);
+    await saveRecordsToBlob(records);
     res.status(201).json(record);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 删除记录 —— 同时删除 Vercel Blob 中的图片
+// 删除记录
 app.delete('/api/records/:id', async (req, res) => {
   try {
-    const records = readRecords();
+    const records = await syncRecordsFromBlob();
     const idx = records.findIndex(r => r.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: '记录不存在' });
     const record = records[idx];
-    // 删除 Vercel Blob 中的图片
     if (record.img && record.img.includes('public.blob.vercel-storage.com')) {
       try { await del(record.img); } catch {}
     }
     records.splice(idx, 1);
-    writeRecords(records);
+    await saveRecordsToBlob(records);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
