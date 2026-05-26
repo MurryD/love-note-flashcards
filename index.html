@@ -1546,10 +1546,10 @@
             });
         }
 
-        function handleBurstFlower()  { burstFromButton(document.getElementById('btnFlower'), '♥', 'glyph-heart'); }
-        function handleBurstGirl()    { burstFromButton(document.getElementById('btnGirl'),   '✿', 'glyph-bloom'); }
-        function handleBurstButterfly(){ burstFromButton(document.getElementById('btnButterfly'), '⋈', 'glyph-wing'); }
-        function handleBurstRain()    { burstFromButton(document.getElementById('btnRain'),   '◞', 'glyph-rain'); }
+        function handleBurstFlower()  { count1++; refreshShow(); saveData(); burstFromButton(document.getElementById('btnFlower'), '♥', 'glyph-heart'); }
+        function handleBurstGirl()    { count2++; refreshShow(); saveData(); burstFromButton(document.getElementById('btnGirl'),   '✿', 'glyph-bloom'); }
+        function handleBurstButterfly(){ count3++; refreshShow(); saveData(); burstFromButton(document.getElementById('btnButterfly'), '⋈', 'glyph-wing'); }
+        function handleBurstRain()    { count4++; refreshShow(); saveData(); burstFromButton(document.getElementById('btnRain'),   '◞', 'glyph-rain'); }
 
         async function handleRecordFlower(){
             await gatherToButton(document.getElementById('btnFlower'));
